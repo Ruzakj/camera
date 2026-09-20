@@ -6,11 +6,15 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.MotionEvent
+import android.view.View
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.camera2.interop.Camera2CameraControl
+import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.core.content.ContextCompat
 import com.ric.camera.databinding.ActivityMainBinding
 import java.text.SimpleDateFormat
@@ -23,6 +27,8 @@ class MainActivity : AppCompatActivity() {
     private var camera: Camera? = null
     private var lensFacing = CameraSelector.LENS_FACING_BACK
     private var flashMode = ImageCapture.FLASH_MODE_OFF
+    private var focusMode = 0
+    private var focusLocked = false
 
     private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         if (it) startCamera() else Toast.makeText(this, "Camera permission diperlukan", Toast.LENGTH_LONG).show()
@@ -36,6 +42,9 @@ class MainActivity : AppCompatActivity() {
         else permission.launch(Manifest.permission.CAMERA)
 
         binding.shutterButton.setOnClickListener { takePhoto() }
+        binding.focusModeButton.setOnClickListener { focusMode = (focusMode + 1) % 3; focusLocked = false; updateFocusUi() }
+        binding.focusLockButton.setOnClickListener { focusLocked = !focusLocked; if (!focusLocked) camera?.cameraControl?.cancelFocusAndMetering(); binding.focusLockButton.text = if (focusLocked) "AF LOCKED" else "AF LOCK" }
+        binding.focusSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener { override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { if (fromUser && focusMode == 2) setManualFocus(p / 1000f) }; override fun onStartTrackingTouch(s: SeekBar?) {}; override fun onStopTrackingTouch(s: SeekBar?) {} })
         binding.switchButton.setOnClickListener {
             lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
             startCamera()
@@ -54,8 +63,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
         binding.previewView.setOnTouchListener { _, e ->
-            if (e.action == MotionEvent.ACTION_UP) {
+            if (e.action == MotionEvent.ACTION_UP && focusMode != 2 && !focusLocked) {
                 val p = binding.previewView.meteringPointFactory.createPoint(e.x, e.y)
+                showFocusRing(e.x, e.y)
                 camera?.cameraControl?.startFocusAndMetering(FocusMeteringAction.Builder(p).setAutoCancelDuration(3, TimeUnit.SECONDS).build())
             }
             true
@@ -71,12 +81,42 @@ class MainActivity : AppCompatActivity() {
             try {
                 provider.unbindAll()
                 camera = provider.bindToLifecycle(this, CameraSelector.Builder().requireLensFacing(lensFacing).build(), preview, imageCapture)
-                binding.statusText.text = "RIC CAMERA • READY"
+                binding.statusText.text = "READY"
+                updateFocusUi()
             } catch (e: Exception) {
                 binding.statusText.text = "CAMERA ERROR"
                 Toast.makeText(this, e.message ?: "Camera gagal dibuka", Toast.LENGTH_LONG).show()
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun updateFocusUi() {
+        binding.focusModeButton.text = when (focusMode) { 0 -> "AF-C"; 1 -> "AF-S"; else -> "MF" }
+        binding.manualFocusPanel.visibility = if (focusMode == 2) View.VISIBLE else View.GONE
+        binding.statusText.text = when (focusMode) { 0 -> "CONTINUOUS AF"; 1 -> "SINGLE AF"; else -> "MANUAL" }
+    }
+
+    private fun showFocusRing(x: Float, y: Float) {
+        binding.focusRing.visibility = View.VISIBLE
+        binding.focusRing.translationX = x - binding.focusRing.width / 2f
+        binding.focusRing.translationY = y - binding.focusRing.height / 2f
+        binding.focusRing.scaleX = 1.25f; binding.focusRing.scaleY = 1.25f
+        binding.focusRing.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(180).withEndAction {
+            binding.focusRing.postDelayed({ binding.focusRing.animate().alpha(0f).setDuration(250).withEndAction { binding.focusRing.visibility = View.GONE }.start() }, 900)
+        }.start()
+    }
+
+    private fun setManualFocus(value: Float) {
+        val c = camera ?: return
+        try {
+            val control = Camera2CameraControl.from(c.cameraControl)
+            val options = CaptureRequestOptions.Builder()
+                .setCaptureRequestOption(android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE, android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE_OFF)
+                .setCaptureRequestOption(android.hardware.camera2.CaptureRequest.LENS_FOCUS_DISTANCE, value * 10f)
+                .build()
+            control.captureRequestOptions = options
+            binding.focusValueText.text = if (value <= .001f) "MANUAL FOCUS • INFINITY" else "MANUAL FOCUS • " + (value * 100).toInt() + "%"
+        } catch (_: Exception) { binding.focusValueText.text = "MANUAL FOCUS • UNSUPPORTED" }
     }
 
     private fun takePhoto() {
