@@ -105,8 +105,17 @@ class MainActivity : AppCompatActivity() {
         future.addListener({
             val provider = future.get()
             val rotation = currentRotation()
-            val preview = Preview.Builder().setTargetRotation(rotation).build().also { it.surfaceProvider = binding.previewView.surfaceProvider }
-            imageCapture = ImageCapture.Builder().setTargetRotation(rotation).setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setFlashMode(flashMode).build()
+            val preview = Preview.Builder()
+                .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                .setTargetRotation(rotation)
+                .build()
+                .also { it.surfaceProvider = binding.previewView.surfaceProvider }
+            imageCapture = ImageCapture.Builder()
+                .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                .setTargetRotation(rotation)
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .setFlashMode(flashMode)
+                .build()
             try {
                 provider.unbindAll()
                 camera = provider.bindToLifecycle(this, CameraSelector.Builder().requireLensFacing(lensFacing).build(), preview, imageCapture)
