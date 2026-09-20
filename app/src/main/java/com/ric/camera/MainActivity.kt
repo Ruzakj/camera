@@ -22,12 +22,12 @@ import androidx.core.content.ContextCompat
 import com.ric.camera.databinding.ActivityMainBinding
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var galleryController: GalleryController
     private lateinit var cameraController: CameraController
+    private lateinit var focusController: FocusController
     private var imageCapture: ImageCapture? = null
     private var camera: Camera? = null
     private var lensFacing = CameraSelector.LENS_FACING_BACK
@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         galleryController = GalleryController(contentResolver)
         cameraController = CameraController()
+        focusController = FocusController(cameraController)
         refreshGalleryThumbnail()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera()
         else permission.launch(Manifest.permission.CAMERA)
@@ -74,7 +75,7 @@ class MainActivity : AppCompatActivity() {
         })
         binding.shutterButton.setOnClickListener { takePhoto() }
         binding.focusModeButton.setOnClickListener { focusMode = (focusMode + 1) % 3; focusLocked = false; updateFocusUi() }
-        binding.focusLockButton.setOnClickListener { focusLocked = !focusLocked; if (!focusLocked) camera?.cameraControl?.cancelFocusAndMetering(); binding.focusLockButton.text = if (focusLocked) "AF LOCKED" else "AF LOCK" }
+        binding.focusLockButton.setOnClickListener { focusLocked = !focusLocked; if (!focusLocked) focusController.cancel(); binding.focusLockButton.text = if (focusLocked) "AF LOCKED" else "AF LOCK" }
         binding.focusSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener { override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { if (fromUser && focusMode == 2) setManualFocus(p / 1000f) }; override fun onStartTrackingTouch(s: SeekBar?) {}; override fun onStopTrackingTouch(s: SeekBar?) {} })
         binding.switchButton.setOnClickListener {
             lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
@@ -98,7 +99,7 @@ class MainActivity : AppCompatActivity() {
             if (e.action == MotionEvent.ACTION_UP && focusMode != 2 && !focusLocked) {
                 val p = binding.previewView.meteringPointFactory.createPoint(e.x, e.y)
                 showFocusRing(e.x, e.y)
-                camera?.cameraControl?.startFocusAndMetering(FocusMeteringAction.Builder(p).setAutoCancelDuration(3, TimeUnit.SECONDS).build())
+                focusController.focus(p)
             }
             true
         }
