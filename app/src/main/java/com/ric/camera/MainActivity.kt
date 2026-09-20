@@ -51,6 +51,20 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
         })
+        binding.exposureSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                val c = camera ?: return
+                val range = c.cameraInfo.exposureState.exposureCompensationRange
+                if (range.lower == 0 && range.upper == 0) return
+                val index = (progress + range.lower).coerceIn(range.lower, range.upper)
+                c.cameraControl.setExposureCompensationIndex(index)
+                val step = c.cameraInfo.exposureState.exposureCompensationStep.toFloat()
+                binding.exposureValueText.text = "EV " + String.format(Locale.US, "%+.1f", index * step)
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
         binding.shutterButton.setOnClickListener { takePhoto() }
         binding.focusModeButton.setOnClickListener { focusMode = (focusMode + 1) % 3; focusLocked = false; updateFocusUi() }
         binding.focusLockButton.setOnClickListener { focusLocked = !focusLocked; if (!focusLocked) camera?.cameraControl?.cancelFocusAndMetering(); binding.focusLockButton.text = if (focusLocked) "AF LOCKED" else "AF LOCK" }
@@ -93,12 +107,29 @@ class MainActivity : AppCompatActivity() {
                 provider.unbindAll()
                 camera = provider.bindToLifecycle(this, CameraSelector.Builder().requireLensFacing(lensFacing).build(), preview, imageCapture)
                 binding.statusText.text = "READY"
+                setupExposureControl()
                 updateFocusUi()
             } catch (e: Exception) {
                 binding.statusText.text = "CAMERA ERROR"
                 Toast.makeText(this, e.message ?: "Camera gagal dibuka", Toast.LENGTH_LONG).show()
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun setupExposureControl() {
+        val state = camera?.cameraInfo?.exposureState ?: return
+        val range = state.exposureCompensationRange
+        val supported = !(range.lower == 0 && range.upper == 0)
+        binding.exposureSeekBar.isEnabled = supported
+        binding.exposureSeekBar.alpha = if (supported) 1f else .35f
+        if (!supported) {
+            binding.exposureValueText.text = "EV • UNSUPPORTED"
+            return
+        }
+        binding.exposureSeekBar.max = range.upper - range.lower
+        binding.exposureSeekBar.progress = state.exposureCompensationIndex - range.lower
+        val ev = state.exposureCompensationIndex * state.exposureCompensationStep.toFloat()
+        binding.exposureValueText.text = "EV " + String.format(Locale.US, "%+.1f", ev)
     }
 
     private fun updateFocusUi() {
