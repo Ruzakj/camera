@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var galleryController: GalleryController
+    private lateinit var cameraController: CameraController
     private var imageCapture: ImageCapture? = null
     private var camera: Camera? = null
     private var lensFacing = CameraSelector.LENS_FACING_BACK
@@ -44,6 +45,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         galleryController = GalleryController(contentResolver)
+        cameraController = CameraController()
         refreshGalleryThumbnail()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera()
         else permission.launch(Manifest.permission.CAMERA)
@@ -112,12 +114,17 @@ class MainActivity : AppCompatActivity() {
             val preview = Preview.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3).setTargetRotation(rotation).build().also { it.surfaceProvider = binding.previewView.surfaceProvider }
             imageCapture = ImageCapture.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3).setTargetRotation(rotation).setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setFlashMode(flashMode).build()
             try {
+                cameraController.detach()
                 provider.unbindAll()
-                camera = provider.bindToLifecycle(this, CameraSelector.Builder().requireLensFacing(lensFacing).build(), preview, imageCapture)
+                val boundCamera = provider.bindToLifecycle(this, CameraSelector.Builder().requireLensFacing(lensFacing).build(), preview, imageCapture)
+                camera = boundCamera
+                cameraController.attach(boundCamera, lensFacing)
                 binding.statusText.text = "READY"
                 setupExposureControl()
                 updateFocusUi()
             } catch (e: Exception) {
+                cameraController.detach()
+                camera = null
                 binding.statusText.text = "CAMERA ERROR"
                 Toast.makeText(this, e.message ?: "Camera gagal dibuka", Toast.LENGTH_LONG).show()
             }
