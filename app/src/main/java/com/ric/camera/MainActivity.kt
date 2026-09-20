@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.SeekBar
 import android.widget.Toast
@@ -29,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private var flashMode = ImageCapture.FLASH_MODE_OFF
     private var focusMode = 0
     private var focusLocked = false
+    private lateinit var scaleDetector: ScaleGestureDetector
 
     private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         if (it) startCamera() else Toast.makeText(this, "Camera permission diperlukan", Toast.LENGTH_LONG).show()
@@ -41,6 +43,14 @@ class MainActivity : AppCompatActivity() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera()
         else permission.launch(Manifest.permission.CAMERA)
 
+        scaleDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val c = camera ?: return false
+                val state = c.cameraInfo.zoomState.value ?: return false
+                c.cameraControl.setZoomRatio((state.zoomRatio * detector.scaleFactor).coerceIn(state.minZoomRatio, state.maxZoomRatio))
+                return true
+            }
+        })
         binding.shutterButton.setOnClickListener { takePhoto() }
         binding.focusModeButton.setOnClickListener { focusMode = (focusMode + 1) % 3; focusLocked = false; updateFocusUi() }
         binding.focusLockButton.setOnClickListener { focusLocked = !focusLocked; if (!focusLocked) camera?.cameraControl?.cancelFocusAndMetering(); binding.focusLockButton.text = if (focusLocked) "AF LOCKED" else "AF LOCK" }
@@ -63,6 +73,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         binding.previewView.setOnTouchListener { _, e ->
+            scaleDetector.onTouchEvent(e)
             if (e.action == MotionEvent.ACTION_UP && focusMode != 2 && !focusLocked) {
                 val p = binding.previewView.meteringPointFactory.createPoint(e.x, e.y)
                 showFocusRing(e.x, e.y)
