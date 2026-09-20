@@ -3,6 +3,7 @@ package com.ric.camera
 import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.MotionEvent
@@ -25,6 +26,7 @@ import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+    private lateinit var galleryController: GalleryController
     private var imageCapture: ImageCapture? = null
     private var camera: Camera? = null
     private var lensFacing = CameraSelector.LENS_FACING_BACK
@@ -41,6 +43,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        galleryController = GalleryController(contentResolver)
+        refreshGalleryThumbnail()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera()
         else permission.launch(Manifest.permission.CAMERA)
 
@@ -105,17 +109,8 @@ class MainActivity : AppCompatActivity() {
         future.addListener({
             val provider = future.get()
             val rotation = currentRotation()
-            val preview = Preview.Builder()
-                .setTargetAspectRatio(AspectRatio.RATIO_4_3)
-                .setTargetRotation(rotation)
-                .build()
-                .also { it.surfaceProvider = binding.previewView.surfaceProvider }
-            imageCapture = ImageCapture.Builder()
-                .setTargetAspectRatio(AspectRatio.RATIO_4_3)
-                .setTargetRotation(rotation)
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                .setFlashMode(flashMode)
-                .build()
+            val preview = Preview.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3).setTargetRotation(rotation).build().also { it.surfaceProvider = binding.previewView.surfaceProvider }
+            imageCapture = ImageCapture.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3).setTargetRotation(rotation).setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setFlashMode(flashMode).build()
             try {
                 provider.unbindAll()
                 camera = provider.bindToLifecycle(this, CameraSelector.Builder().requireLensFacing(lensFacing).build(), preview, imageCapture)
@@ -132,6 +127,15 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         binding.previewView.post { imageCapture?.targetRotation = currentRotation() }
+        if (::galleryController.isInitialized) refreshGalleryThumbnail()
+    }
+
+    private fun refreshGalleryThumbnail(preferredUri: Uri? = null) {
+        val uri = preferredUri?.takeIf { galleryController.isReadable(it) }
+            ?: galleryController.latestImageUri()?.takeIf { galleryController.isReadable(it) }
+        binding.galleryThumbnail.setImageURI(null)
+        if (uri != null) binding.galleryThumbnail.setImageURI(uri)
+        binding.galleryThumbnail.alpha = if (uri != null) 1f else .35f
     }
 
     private fun setupExposureControl() {
@@ -140,10 +144,7 @@ class MainActivity : AppCompatActivity() {
         val supported = !(range.lower == 0 && range.upper == 0)
         binding.exposureSeekBar.isEnabled = supported
         binding.exposureSeekBar.alpha = if (supported) 1f else .35f
-        if (!supported) {
-            binding.exposureValueText.text = "EV • UNSUPPORTED"
-            return
-        }
+        if (!supported) { binding.exposureValueText.text = "EV • UNSUPPORTED"; return }
         binding.exposureSeekBar.max = range.upper - range.lower
         binding.exposureSeekBar.progress = state.exposureCompensationIndex - range.lower
         val ev = state.exposureCompensationIndex * state.exposureCompensationStep.toFloat()
@@ -172,8 +173,7 @@ class MainActivity : AppCompatActivity() {
             val control = Camera2CameraControl.from(c.cameraControl)
             val options = CaptureRequestOptions.Builder()
                 .setCaptureRequestOption(android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE, android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE_OFF)
-                .setCaptureRequestOption(android.hardware.camera2.CaptureRequest.LENS_FOCUS_DISTANCE, value * 10f)
-                .build()
+                .setCaptureRequestOption(android.hardware.camera2.CaptureRequest.LENS_FOCUS_DISTANCE, value * 10f).build()
             control.captureRequestOptions = options
             binding.focusValueText.text = if (value <= .001f) "MANUAL FOCUS • INFINITY" else "MANUAL FOCUS • " + (value * 100).toInt() + "%"
         } catch (_: Exception) { binding.focusValueText.text = "MANUAL FOCUS • UNSUPPORTED" }
@@ -190,8 +190,16 @@ class MainActivity : AppCompatActivity() {
         val output = ImageCapture.OutputFileOptions.Builder(contentResolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values).build()
         capture.takePicture(output, ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(result: ImageCapture.OutputFileResults) {
-                binding.statusText.text = "SAVED"
-                Toast.makeText(this@MainActivity, "Foto tersimpan", Toast.LENGTH_SHORT).show()
+                val savedUri = result.savedUri
+                if (galleryController.isReadable(savedUri)) {
+                    binding.statusText.text = "SAVED"
+                    refreshGalleryThumbnail(savedUri)
+                    Toast.makeText(this@MainActivity, "Foto tersimpan", Toast.LENGTH_SHORT).show()
+                } else {
+                    binding.statusText.text = "SAVE VERIFY ERROR"
+                    refreshGalleryThumbnail()
+                    Toast.makeText(this@MainActivity, "Foto tersimpan tetapi belum dapat dibaca", Toast.LENGTH_LONG).show()
+                }
             }
             override fun onError(exception: ImageCaptureException) {
                 binding.statusText.text = "SAVE ERROR"
