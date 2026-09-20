@@ -13,3 +13,5 @@ Native Android camera app.
 
 ## Next
 Pinch zoom, exposure compensation, aspect ratios, Camera2 Pro controls, RAW/DNG, HDR/Night, video, stabilization, histogram, grid and level.
+
+Build verification: GitHub Actions.
