@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import android.view.Surface
 import android.view.View
 import android.widget.SeekBar
 import android.widget.Toast
@@ -97,12 +98,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun currentRotation(): Int = binding.previewView.display?.rotation ?: Surface.ROTATION_0
+
     private fun startCamera() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
             val provider = future.get()
-            val preview = Preview.Builder().build().also { it.surfaceProvider = binding.previewView.surfaceProvider }
-            imageCapture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setFlashMode(flashMode).build()
+            val rotation = currentRotation()
+            val preview = Preview.Builder().setTargetRotation(rotation).build().also { it.surfaceProvider = binding.previewView.surfaceProvider }
+            imageCapture = ImageCapture.Builder().setTargetRotation(rotation).setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setFlashMode(flashMode).build()
             try {
                 provider.unbindAll()
                 camera = provider.bindToLifecycle(this, CameraSelector.Builder().requireLensFacing(lensFacing).build(), preview, imageCapture)
@@ -114,6 +118,11 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, e.message ?: "Camera gagal dibuka", Toast.LENGTH_LONG).show()
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        binding.previewView.post { imageCapture?.targetRotation = currentRotation() }
     }
 
     private fun setupExposureControl() {
@@ -163,6 +172,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun takePhoto() {
         val capture = imageCapture ?: return
+        capture.targetRotation = currentRotation()
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "RIC_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis()))
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
