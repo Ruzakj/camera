@@ -16,7 +16,8 @@ data class CameraCapabilities(
     val exposureCompensationSupported: Boolean,
     val exposureCompensationMinIndex: Int,
     val exposureCompensationMaxIndex: Int,
-    val exposureCompensationStep: Float
+    val exposureCompensationStep: Float,
+    val manualExposure: ManualExposureCapabilities = ManualExposureCapabilities.Unsupported
 ) {
     companion object {
         fun from(camera: Camera, lensFacing: Int): CameraCapabilities {
@@ -31,7 +32,8 @@ data class CameraCapabilities(
                 exposureCompensationSupported = exposure.isSupported(),
                 exposureCompensationMinIndex = range.lower,
                 exposureCompensationMaxIndex = range.upper,
-                exposureCompensationStep = exposure.exposureCompensationStep.toFloat()
+                exposureCompensationStep = exposure.exposureCompensationStep.toFloat(),
+                manualExposure = ManualExposureCapabilityProbe.from(camera.cameraInfo)
             )
         }
     }
