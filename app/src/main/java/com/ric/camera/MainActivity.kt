@@ -114,8 +114,8 @@ class MainActivity : AppCompatActivity() {
             val rotation = currentRotation()
             val preview = Preview.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3).setTargetRotation(rotation).build().also { it.surfaceProvider = binding.previewView.surfaceProvider }
             imageCapture = ImageCapture.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3).setTargetRotation(rotation).setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setFlashMode(flashMode).build()
+            cameraController.beginBinding(lensFacing)
             try {
-                cameraController.detach()
                 provider.unbindAll()
                 val boundCamera = provider.bindToLifecycle(this, CameraSelector.Builder().requireLensFacing(lensFacing).build(), preview, imageCapture)
                 camera = boundCamera
@@ -124,7 +124,7 @@ class MainActivity : AppCompatActivity() {
                 setupExposureControl()
                 updateFocusUi()
             } catch (e: Exception) {
-                cameraController.detach()
+                cameraController.failBinding(e)
                 camera = null
                 binding.statusText.text = "CAMERA ERROR"
                 Toast.makeText(this, e.message ?: "Camera gagal dibuka", Toast.LENGTH_LONG).show()
