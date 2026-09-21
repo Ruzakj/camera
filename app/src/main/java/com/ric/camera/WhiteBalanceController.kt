@@ -1,11 +1,14 @@
 package com.ric.camera
 
+import android.hardware.camera2.CaptureRequest
+import androidx.camera.camera2.impl.Camera2ImplConfig
+import androidx.camera.camera2.interop.Camera2CameraControl
+
 /**
  * Capability-safe boundary for white-balance requests.
  *
- * This checkpoint only validates requested AWB modes against the active
- * camera's probed capabilities. Camera2 request wiring is intentionally kept
- * separate so unsupported hardware continues using its existing AWB path.
+ * AWB modes are applied only when advertised by the active camera. Clearing
+ * removes the Camera2 override so CameraX can resume its normal AWB path.
  */
 class WhiteBalanceController(
     private val cameraController: CameraController
@@ -19,13 +22,24 @@ class WhiteBalanceController(
     fun requestMode(mode: Int): Boolean {
         val capabilities = cameraController.capabilities?.whiteBalance ?: return false
         if (!capabilities.supports(mode)) return false
-        if (cameraController.camera == null) return false
+        val camera = cameraController.camera ?: return false
 
-        requestedAwbMode = mode
-        return true
+        return runCatching {
+            Camera2CameraControl.from(camera.cameraControl).setCaptureRequestOptions(
+                Camera2ImplConfig.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, mode)
+                    .build()
+            )
+            requestedAwbMode = mode
+        }.isSuccess
     }
 
     fun clear() {
+        cameraController.camera?.let { camera ->
+            runCatching {
+                Camera2CameraControl.from(camera.cameraControl).clearCaptureRequestOptions()
+            }
+        }
         requestedAwbMode = null
     }
 }
