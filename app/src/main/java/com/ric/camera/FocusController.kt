@@ -5,24 +5,29 @@ import androidx.camera.core.MeteringPoint
 import java.util.concurrent.TimeUnit
 
 /**
- * Focus boundary for the currently bound CameraX camera.
+ * Focus/metering boundary for the currently bound CameraX camera.
  *
- * Keeps tap-to-focus capability-safe: when no camera is attached the request
- * is ignored rather than leaking lifecycle state into the UI layer.
+ * Keeps metering capability-safe: when no camera is attached the request is
+ * ignored rather than leaking lifecycle state into the UI layer. Persistent
+ * requests intentionally skip auto-cancel so AE/AF lock can be applied after
+ * the metering point has settled.
  */
 class FocusController(
     private val cameraController: CameraController,
 ) {
-    fun focus(point: MeteringPoint): Boolean {
+    fun focus(point: MeteringPoint): Boolean = meter(point, persistent = false)
+
+    fun meter(point: MeteringPoint, persistent: Boolean): Boolean {
         val camera = cameraController.camera ?: return false
-        val action = FocusMeteringAction.Builder(
+        val builder = FocusMeteringAction.Builder(
             point,
             FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE,
         )
-            .setAutoCancelDuration(3, TimeUnit.SECONDS)
-            .build()
+        if (!persistent) {
+            builder.setAutoCancelDuration(3, TimeUnit.SECONDS)
+        }
 
-        camera.cameraControl.startFocusAndMetering(action)
+        camera.cameraControl.startFocusAndMetering(builder.build())
         return true
     }
 
