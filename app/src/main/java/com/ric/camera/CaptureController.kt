@@ -39,6 +39,17 @@ class CaptureController(
         return MultiFrameExecutionBoundary.decisionFor(plan)
     }
 
+    fun executionPlan(
+        capabilities: ComputationalPhotographyCapabilities,
+        maxFrameCount: Int = 3,
+    ): MultiFrameExecutor.ExecutionPlan? {
+        val decision = executionDecision(capabilities) ?: return null
+        return MultiFrameExecutor.fromCapabilities(
+            capabilities = capabilities,
+            maxFrameCount = maxFrameCount,
+        ).prepare(decision)
+    }
+
     fun <T> withImageCapture(block: (ImageCapture) -> T): T? {
         val capture = imageCapture ?: return null
         return block(capture)
