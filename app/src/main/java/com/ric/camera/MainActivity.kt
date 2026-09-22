@@ -28,6 +28,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var galleryController: GalleryController
     private lateinit var cameraController: CameraController
     private lateinit var focusController: FocusController
+    private lateinit var captureController: CaptureController
+    private lateinit var stillCaptureCoordinator: StillCaptureExecutionCoordinator
     private var lensSwitchController: LensSwitchController? = null
     private var imageCapture: ImageCapture? = null
     private var camera: Camera? = null
@@ -48,6 +50,8 @@ class MainActivity : AppCompatActivity() {
         galleryController = GalleryController(contentResolver)
         cameraController = CameraController()
         focusController = FocusController(cameraController)
+        captureController = CaptureController()
+        stillCaptureCoordinator = StillCaptureExecutionCoordinator(captureController)
         refreshGalleryThumbnail()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera()
         else permission.launch(Manifest.permission.CAMERA)
@@ -124,16 +128,19 @@ class MainActivity : AppCompatActivity() {
             val preview = Preview.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3).setTargetRotation(rotation).build().also { it.surfaceProvider = binding.previewView.surfaceProvider }
             imageCapture = ImageCapture.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3).setTargetRotation(rotation).setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setFlashMode(flashMode).build()
             cameraController.beginBinding(lensFacing)
+            captureController.detach()
             try {
                 provider.unbindAll()
                 val boundCamera = provider.bindToLifecycle(this, CameraSelector.Builder().requireLensFacing(lensFacing).build(), preview, imageCapture)
                 camera = boundCamera
                 cameraController.attach(boundCamera, lensFacing)
+                captureController.attach(requireNotNull(imageCapture))
                 binding.statusText.text = "READY"
                 setupExposureControl()
                 updateFocusUi()
             } catch (e: Exception) {
                 cameraController.failBinding(e)
+                captureController.detach()
                 camera = null
                 binding.statusText.text = "CAMERA ERROR"
                 Toast.makeText(this, e.message ?: "Camera gagal dibuka", Toast.LENGTH_LONG).show()
@@ -197,31 +204,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun takePhoto() {
-        val capture = imageCapture ?: return
-        capture.targetRotation = currentRotation()
+        val boundCamera = camera ?: return
+        imageCapture?.targetRotation = currentRotation()
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "RIC_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis()))
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
             put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Ric Camera")
         }
         val output = ImageCapture.OutputFileOptions.Builder(contentResolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values).build()
-        capture.takePicture(output, ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageSavedCallback {
-            override fun onImageSaved(result: ImageCapture.OutputFileResults) {
-                val savedUri = result.savedUri
-                if (galleryController.isReadable(savedUri)) {
-                    binding.statusText.text = "SAVED"
-                    refreshGalleryThumbnail(savedUri)
-                    Toast.makeText(this@MainActivity, "Foto tersimpan", Toast.LENGTH_SHORT).show()
-                } else {
-                    binding.statusText.text = "SAVE VERIFY ERROR"
-                    refreshGalleryThumbnail()
-                    Toast.makeText(this@MainActivity, "Foto tersimpan tetapi belum dapat dibaca", Toast.LENGTH_LONG).show()
+        stillCaptureCoordinator.execute(boundCamera.cameraInfo) { capture ->
+            capture.takePicture(output, ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(result: ImageCapture.OutputFileResults) {
+                    val savedUri = result.savedUri
+                    if (galleryController.isReadable(savedUri)) {
+                        binding.statusText.text = "SAVED"
+                        refreshGalleryThumbnail(savedUri)
+                        Toast.makeText(this@MainActivity, "Foto tersimpan", Toast.LENGTH_SHORT).show()
+                    } else {
+                        binding.statusText.text = "SAVE VERIFY ERROR"
+                        refreshGalleryThumbnail()
+                        Toast.makeText(this@MainActivity, "Foto tersimpan tetapi belum dapat dibaca", Toast.LENGTH_LONG).show()
+                    }
                 }
-            }
-            override fun onError(exception: ImageCaptureException) {
-                binding.statusText.text = "SAVE ERROR"
-                Toast.makeText(this@MainActivity, exception.message, Toast.LENGTH_LONG).show()
-            }
-        })
+                override fun onError(exception: ImageCaptureException) {
+                    binding.statusText.text = "SAVE ERROR"
+                    Toast.makeText(this@MainActivity, exception.message, Toast.LENGTH_LONG).show()
+                }
+            })
+        }
     }
 }
