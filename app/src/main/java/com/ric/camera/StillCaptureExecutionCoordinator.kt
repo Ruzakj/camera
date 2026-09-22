@@ -31,6 +31,9 @@ class StillCaptureExecutionCoordinator(
      * the prepared plan cannot run as multi-frame. This is intentionally separate from
      * [execute] so the proven production save/gallery path cannot change implicitly.
      *
+     * Backend failures are contained at this experimental boundary so an unavailable
+     * computational path cannot crash the normal still-capture flow.
+     *
      * @return true only when the complete multi-frame request was accepted and executed.
      */
     fun executeMultiFrameOrFallback(
@@ -49,9 +52,11 @@ class StillCaptureExecutionCoordinator(
             maxFrameCount = maxFrameCount,
         )
 
-        val burstExecuted = executor.executeMultiFrame(plan) {
-            captureFrame(capture)
-        }
+        val burstExecuted = runCatching {
+            executor.executeMultiFrame(plan) {
+                captureFrame(capture)
+            }
+        }.getOrDefault(false)
         if (!burstExecuted) {
             captureFrame(capture)
         }
