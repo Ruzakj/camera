@@ -28,6 +28,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var galleryController: GalleryController
     private lateinit var cameraController: CameraController
     private lateinit var focusController: FocusController
+    private var lensSwitchController: LensSwitchController? = null
     private var imageCapture: ImageCapture? = null
     private var camera: Camera? = null
     private var lensFacing = CameraSelector.LENS_FACING_BACK
@@ -78,8 +79,12 @@ class MainActivity : AppCompatActivity() {
         binding.focusLockButton.setOnClickListener { focusLocked = !focusLocked; if (!focusLocked) focusController.cancel(); binding.focusLockButton.text = if (focusLocked) "AF LOCKED" else "AF LOCK" }
         binding.focusSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener { override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { if (fromUser && focusMode == 2) setManualFocus(p / 1000f) }; override fun onStartTrackingTouch(s: SeekBar?) {}; override fun onStopTrackingTouch(s: SeekBar?) {} })
         binding.switchButton.setOnClickListener {
-            lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
-            startCamera()
+            val controller = lensSwitchController ?: return@setOnClickListener
+            val nextLens = controller.nextLens(lensFacing)
+            if (nextLens != lensFacing) {
+                lensFacing = nextLens
+                startCamera()
+            }
         }
         binding.flashButton.setOnClickListener {
             flashMode = when (flashMode) {
@@ -111,6 +116,10 @@ class MainActivity : AppCompatActivity() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
             val provider = future.get()
+            val switchController = LensSwitchController(LensCapabilities.from(provider))
+            lensSwitchController = switchController
+            binding.switchButton.isEnabled = switchController.canSwitch(lensFacing)
+            binding.switchButton.alpha = if (binding.switchButton.isEnabled) 1f else .35f
             val rotation = currentRotation()
             val preview = Preview.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3).setTargetRotation(rotation).build().also { it.surfaceProvider = binding.previewView.surfaceProvider }
             imageCapture = ImageCapture.Builder().setTargetAspectRatio(AspectRatio.RATIO_4_3).setTargetRotation(rotation).setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).setFlashMode(flashMode).build()
