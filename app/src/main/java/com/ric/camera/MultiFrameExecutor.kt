@@ -34,4 +34,16 @@ class MultiFrameExecutor(
             }
         }
     }
+
+    companion object {
+        fun fromCapabilities(
+            capabilities: ComputationalPhotographyCapabilities,
+            maxFrameCount: Int = 3,
+        ): MultiFrameExecutor = MultiFrameExecutor(
+            burstBackend = MultiFrameBurstBackendFactory.from(
+                capabilities = capabilities,
+                maxFrameCount = maxFrameCount,
+            )
+        )
+    }
 }
