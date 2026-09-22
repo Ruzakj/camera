@@ -5,11 +5,13 @@ import androidx.camera.core.ImageCapture
 /**
  * Lifecycle-safe boundary for still-image capture state.
  *
- * This checkpoint intentionally does not move the existing save pipeline yet;
- * it only centralizes ownership of the currently bound ImageCapture use case so
- * later capture refactors can fail safely when the camera is not ready.
+ * The proven ImageCapture/save pipeline remains untouched. Computational capture
+ * is exposed as planning metadata only so later execution work can be introduced
+ * without bypassing readiness checks or the single-frame fallback.
  */
-class CaptureController {
+class CaptureController(
+    private val multiFrameCoordinator: MultiFrameCaptureCoordinator = MultiFrameCaptureCoordinator()
+) {
     private var imageCapture: ImageCapture? = null
 
     val isReady: Boolean
@@ -21,6 +23,13 @@ class CaptureController {
 
     fun detach() {
         imageCapture = null
+    }
+
+    fun capturePlan(
+        capabilities: ComputationalPhotographyCapabilities
+    ): ComputationalCapturePlan? {
+        if (!isReady) return null
+        return multiFrameCoordinator.plan(capabilities)
     }
 
     fun <T> withImageCapture(block: (ImageCapture) -> T): T? {
