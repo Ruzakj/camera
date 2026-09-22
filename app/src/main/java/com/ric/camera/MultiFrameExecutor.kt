@@ -35,6 +35,23 @@ class MultiFrameExecutor(
         }
     }
 
+    /**
+     * Executes only an already-prepared multi-frame plan.
+     *
+     * Returning false is intentional: the caller retains ownership of the single-frame
+     * fallback, preventing a rejected/failed burst from causing duplicate captures.
+     */
+    fun executeMultiFrame(
+        plan: ExecutionPlan,
+        captureFrame: () -> Unit,
+    ): Boolean {
+        val decision = plan.effective as? ComputationalExecutionDecision.MultiFrame ?: return false
+        return burstBackend.execute(
+            frameCount = decision.frameCount,
+            captureFrame = captureFrame,
+        )
+    }
+
     companion object {
         fun fromCapabilities(
             capabilities: ComputationalPhotographyCapabilities,
