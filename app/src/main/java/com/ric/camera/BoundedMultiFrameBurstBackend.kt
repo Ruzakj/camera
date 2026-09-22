@@ -1,11 +1,11 @@
 package com.ric.camera
 
 /**
- * Minimal verified burst capability implementation.
+ * Minimal verified bounded burst implementation.
  *
- * This backend only advertises bounded multi-frame support. It deliberately
- * performs no capture work, so the production ImageCapture path remains
- * unchanged until a real burst execution path is verified separately.
+ * Execution is capability-gated and synchronous: the supplied frame callback is
+ * invoked exactly [frameCount] times only when the complete request is supported.
+ * Unsupported requests return false without touching the proven single-frame path.
  */
 class BoundedMultiFrameBurstBackend(
     private val maxFrameCount: Int,
@@ -14,4 +14,13 @@ class BoundedMultiFrameBurstBackend(
 
     override fun supports(frameCount: Int): Boolean =
         isAvailable && maxFrameCount > 1 && frameCount in 2..maxFrameCount
+
+    override fun execute(frameCount: Int, captureFrame: () -> Unit): Boolean {
+        if (!supports(frameCount)) return false
+
+        repeat(frameCount) {
+            captureFrame()
+        }
+        return true
+    }
 }
