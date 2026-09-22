@@ -6,8 +6,8 @@ import androidx.camera.core.ImageCapture
  * Lifecycle-safe boundary for still-image capture state.
  *
  * The proven ImageCapture/save pipeline remains untouched. Computational capture
- * is exposed as planning metadata only so later execution work can be introduced
- * without bypassing readiness checks or the single-frame fallback.
+ * is exposed as planning/execution metadata only so later execution work can be
+ * introduced without bypassing readiness checks or the single-frame fallback.
  */
 class CaptureController(
     private val multiFrameCoordinator: MultiFrameCaptureCoordinator = MultiFrameCaptureCoordinator()
@@ -30,6 +30,13 @@ class CaptureController(
     ): ComputationalCapturePlan? {
         if (!isReady) return null
         return multiFrameCoordinator.plan(capabilities)
+    }
+
+    fun executionDecision(
+        capabilities: ComputationalPhotographyCapabilities
+    ): ComputationalExecutionDecision? {
+        val plan = capturePlan(capabilities) ?: return null
+        return MultiFrameExecutionBoundary.decisionFor(plan)
     }
 
     fun <T> withImageCapture(block: (ImageCapture) -> T): T? {
