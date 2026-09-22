@@ -18,7 +18,8 @@ data class CameraCapabilities(
     val exposureCompensationMaxIndex: Int,
     val exposureCompensationStep: Float,
     val manualExposure: ManualExposureCapabilities = ManualExposureCapabilities.Unsupported,
-    val whiteBalance: WhiteBalanceCapabilities = WhiteBalanceCapabilities.Unsupported
+    val whiteBalance: WhiteBalanceCapabilities = WhiteBalanceCapabilities.Unsupported,
+    val computationalPhotography: ComputationalPhotographyCapabilities = ComputationalPhotographyCapabilities.Unsupported
 ) {
     companion object {
         fun from(camera: Camera, lensFacing: Int): CameraCapabilities {
@@ -35,7 +36,8 @@ data class CameraCapabilities(
                 exposureCompensationMaxIndex = range.upper,
                 exposureCompensationStep = exposure.exposureCompensationStep.toFloat(),
                 manualExposure = ManualExposureCapabilityProbe.from(camera.cameraInfo),
-                whiteBalance = WhiteBalanceCapabilityProbe.from(camera.cameraInfo)
+                whiteBalance = WhiteBalanceCapabilityProbe.from(camera.cameraInfo),
+                computationalPhotography = ComputationalPhotographyCapabilityProbe.from(camera.cameraInfo)
             )
         }
     }
