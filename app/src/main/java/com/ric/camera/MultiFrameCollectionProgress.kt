@@ -14,13 +14,23 @@ class MultiFrameCollectionProgress(
         backend: MultiFrameBurstBackend,
         captureFrame: () -> Unit,
     ): MultiFrameBurstBackend.ExecutionResult {
-        var nextFrameId = 0L
+        val initialCollectedFrameCount = collection.collectedFrameCount
+        var nextFrameId = initialCollectedFrameCount.toLong()
         val result = backend.execute(collection.expectedFrameCount) {
             captureFrame()
-            collection.recordFrame(nextFrameId++)
+            check(collection.recordFrame(nextFrameId++)) {
+                "Burst progress violated collection bounds or lifecycle state"
+            }
         }
 
-        if (!result.completed && result.framesStarted > 0) {
+        val framesCollected = collection.collectedFrameCount - initialCollectedFrameCount
+        val progressMatchesExecution = framesCollected == result.framesStarted
+        val completionMatchesCollection = result.completed ==
+            (collection.state == MultiFrameCollection.State.Complete)
+
+        if (!progressMatchesExecution || !completionMatchesCollection) {
+            collection.fail()
+        } else if (!result.completed && result.framesStarted > 0) {
             collection.fail()
         }
         return result
