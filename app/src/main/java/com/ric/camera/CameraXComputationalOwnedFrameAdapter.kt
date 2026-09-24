@@ -46,9 +46,21 @@ object CameraXComputationalOwnedFrameAdapter {
         frameId: Long,
         image: ImageProxy,
         captureResult: CaptureResult?,
-    ): ComputationalOwnedFrame? = adopt(
-        frameId = frameId,
-        image = image,
-        exposure = Camera2ComputationalExposureMetadataAdapter.snapshot(captureResult),
-    )
+    ): ComputationalOwnedFrame? {
+        val exposure = if (
+            captureResult != null &&
+            image.imageInfo.timestamp > 0L &&
+            image.imageInfo.timestamp == captureResult.get(CaptureResult.SENSOR_TIMESTAMP)
+        ) {
+            Camera2ComputationalExposureMetadataAdapter.snapshot(captureResult)
+        } else {
+            ComputationalExposureMetadata.Unavailable
+        }
+
+        return adopt(
+            frameId = frameId,
+            image = image,
+            exposure = exposure,
+        )
+    }
 }
