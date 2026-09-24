@@ -1,5 +1,6 @@
 package com.ric.camera
 
+import android.hardware.camera2.CaptureResult
 import androidx.camera.core.ImageProxy
 
 /**
@@ -40,4 +41,14 @@ object CameraXComputationalOwnedFrameAdapter {
             null
         }
     }
+
+    fun adopt(
+        frameId: Long,
+        image: ImageProxy,
+        captureResult: CaptureResult?,
+    ): ComputationalOwnedFrame? = adopt(
+        frameId = frameId,
+        image = image,
+        exposure = Camera2ComputationalExposureMetadataAdapter.snapshot(captureResult),
+    )
 }
